@@ -1,0 +1,5 @@
+docs-and-notes/*
+__pycache__/*
+build/*
+*.o
+tools/*
