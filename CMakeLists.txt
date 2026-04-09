@@ -7,18 +7,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenMP REQUIRED)
 
-add_executable(solver
-    src/main.cpp
-    src/io/instance_reader.cpp
-    src/io/result_printer.cpp
-    src/solution_checker.cpp
-    src/solvers/random_solver.cpp
-    src/solvers/constructive_heuristic_solver.cpp
-    src/solvers/nearest_neighbor_solver.cpp
-    src/solvers/greedy_cycle_solver.cpp
-    src/solvers/regret_solver.cpp
-)
-
-target_link_libraries(solver PRIVATE OpenMP::OpenMP_CXX)
-
-target_include_directories(solver PRIVATE src)
+add_subdirectory(common)
+add_subdirectory(lab1)
+add_subdirectory(lab2)
