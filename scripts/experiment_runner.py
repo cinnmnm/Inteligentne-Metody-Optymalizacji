@@ -10,6 +10,40 @@ from typing import Dict, List
 import pandas as pd
 
 
+def _get_vertex_count(instance_path: Path) -> int:
+    count = 0
+    with instance_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                count += 1
+    return count
+
+
+def build_execution_plan(
+    instances: Dict[str, Path],
+    start_nodes_per_instance: int,
+    runs_per_instance: int,
+    seed: int,
+) -> List[tuple[str, Path, int, int]]:
+    rng = random.Random(seed)
+    plan: List[tuple[str, Path, int, int]] = []
+
+    for instance_name, instance_path in instances.items():
+        max_node = _get_vertex_count(instance_path) - 1
+        if max_node < 0:
+            raise RuntimeError(f"Instance has no vertices: {instance_path}")
+
+        start_node_count = min(start_nodes_per_instance, max_node + 1)
+        start_nodes = rng.sample(range(max_node + 1), k=start_node_count)
+
+        for start_node in start_nodes:
+            for _ in range(runs_per_instance):
+                run_seed = rng.randint(0, 2**31 - 1)
+                plan.append((instance_name, instance_path, start_node, run_seed))
+
+    return plan
+
+
 @dataclass
 class ExperimentRunner:
     binary_path: Path
@@ -18,27 +52,27 @@ class ExperimentRunner:
     runs_per_instance: int
     start_nodes_per_instance: int
     seed: int = 80081355
+    solver_extra_args: Dict[str, List[str]] | None = None
+    execution_plan: List[tuple[str, Path, int, int]] | None = None
 
     def run(self) -> pd.DataFrame:
-        rng = random.Random(self.seed)
+        if self.execution_plan is None:
+            execution_plan = build_execution_plan(
+                instances=self.instances,
+                start_nodes_per_instance=self.start_nodes_per_instance,
+                runs_per_instance=self.runs_per_instance,
+                seed=self.seed,
+            )
+        else:
+            execution_plan = self.execution_plan
+
         rows: List[dict] = []
-
-        for instance_name, instance_path in self.instances.items():
-            max_node = self._get_vertex_count(instance_path) - 1
-            if max_node < 0:
-                raise RuntimeError(f"Instance has no vertices: {instance_path}")
-
-            start_node_count = min(self.start_nodes_per_instance, max_node + 1)
-            start_nodes = rng.sample(range(max_node + 1), k=start_node_count)
-
+        for instance_name, instance_path, start_node, run_seed in execution_plan:
             for solver_name in self.solvers:
-                for start_node in start_nodes:
-                    for _ in range(self.runs_per_instance):
-                        run_seed = rng.randint(0, 2**31 - 1)
-                        payload = self._run_single(instance_path, solver_name, start_node, run_seed)
-                        payload["instance"] = instance_name
-                        payload["seed"] = run_seed
-                        rows.append(payload)
+                payload = self._run_single(instance_path, solver_name, start_node, run_seed)
+                payload["instance"] = instance_name
+                payload["seed"] = run_seed
+                rows.append(payload)
 
         return pd.DataFrame(rows)
 
@@ -52,6 +86,10 @@ class ExperimentRunner:
             str(start_node),
             str(seed),
         ]
+
+        if self.solver_extra_args and solver_name in self.solver_extra_args:
+            cmd.extend(self.solver_extra_args[solver_name])
+
         completed = subprocess.run(
             cmd,
             capture_output=True,
@@ -75,15 +113,6 @@ class ExperimentRunner:
             raise RuntimeError(
                 f"Failed to parse solver JSON output. command={' '.join(cmd)} stdout={stdout}"
             ) from ex
-
-    @staticmethod
-    def _get_vertex_count(instance_path: Path) -> int:
-        count = 0
-        with instance_path.open("r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    count += 1
-        return count
 
 
 def save_results(df: pd.DataFrame, results_dir: Path) -> tuple[Path, Path]:
