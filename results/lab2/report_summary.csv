@@ -1,0 +1,11 @@
+instance,solver,min_final_objective,max_final_objective,mean_final_objective,mean_time_ms
+TSPA,greedy_edge,-17119,-15160,-16034.15,11.83236529
+TSPA,greedy_node,-17190,-15782,-16318.78,11.55897453
+TSPA,random_walk,-17670,-16008,-16723.9,23.57029561
+TSPA,steepest_edge,-16822,-15125,-15948.77,22.491869440000002
+TSPA,steepest_node,-17190,-15782,-16318.85,18.620438670000002
+TSPB,greedy_edge,-18776,-15341,-17089.95,12.14657778
+TSPB,greedy_node,-19729,-16165,-17533.36,11.910229710000001
+TSPB,random_walk,-19999,-16512,-17893.52,23.65578221
+TSPB,steepest_edge,-18730,-15635,-17007.9,23.41777408
+TSPB,steepest_node,-19729,-16165,-17532.52,19.63652845

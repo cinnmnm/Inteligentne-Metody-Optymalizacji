@@ -4,6 +4,7 @@
 #include <vector>
 
 struct SolveResult {
+    std::vector<int> initial_path;
     std::vector<int> path;
     int phase1_distance = 0;
     int phase1_profit = 0;

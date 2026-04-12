@@ -9,11 +9,53 @@ from experiment_runner import ExperimentRunner, build_execution_plan, save_resul
 from plot_results import generate_best_solution_plots
 
 
+def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
+    group_cols = ["instance", "solver"]
+
+    distance_col = "final_distance" if "final_distance" in df.columns else "phase2_distance"
+    profit_col = "final_profit" if "final_profit" in df.columns else "phase2_profit"
+
+    if lab_name == "lab1":
+        return (
+            df.groupby(group_cols, as_index=False)
+            .agg(
+                min_final_objective=("final_objective", "min"),
+                max_final_objective=("final_objective", "max"),
+                mean_final_objective=("final_objective", "mean"),
+                mean_final_profit=(profit_col, "mean"),
+                mean_final_distance=(distance_col, "mean"),
+                mean_time_ms=("time_ms", "mean"),
+            )
+        )
+
+    if lab_name == "lab2":
+        return (
+            df.groupby(group_cols, as_index=False)
+            .agg(
+                min_final_objective=("final_objective", "min"),
+                max_final_objective=("final_objective", "max"),
+                mean_final_objective=("final_objective", "mean"),
+                mean_final_distance=(distance_col, "mean"),
+                mean_time_ms=("time_ms", "mean"),
+            )
+        )
+
+    return (
+        df.groupby(group_cols, as_index=False)
+        .agg(
+            min_final_objective=("final_objective", "min"),
+            max_final_objective=("final_objective", "max"),
+            mean_final_objective=("final_objective", "mean"),
+            mean_time_ms=("time_ms", "mean"),
+        )
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run experiments for selected lab and save outputs.")
     parser.add_argument("--lab", default="lab1", help="Lab name, e.g. lab1, lab2")
     parser.add_argument("--runs-per-instance", type=int, default=1, help="Number of runs per (instance, solver, start node)")
-    parser.add_argument("--start-nodes-per-instance", type=int, default=200, help="Number of random start nodes per instance")
+    parser.add_argument("--start-nodes-per-instance", type=int, default=100, help="Number of random start nodes per instance")
     parser.add_argument(
         "--initial-solution-type",
         default="heuristic",
@@ -117,8 +159,15 @@ def main() -> None:
         )
         df = runner.run()
 
-    results_dir = root / "results" / args.lab
+    if args.lab == "lab2":
+        results_dir = root / "results" / args.lab / args.initial_solution_type
+    else:
+        results_dir = root / "results" / args.lab
     csv_path, json_path = save_results(df, results_dir)
+
+    summary_df = build_report_summary(df, args.lab)
+    summary_path = results_dir / "report_summary.csv"
+    summary_df.to_csv(summary_path, index=False)
 
     print(f"\nGotowe! Wyniki zapisano w folderze: {results_dir}")
     print(f"CSV: {csv_path.name}")

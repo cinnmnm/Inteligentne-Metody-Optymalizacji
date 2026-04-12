@@ -38,6 +38,7 @@ SolveResult LocalSearchSolver::solve(const Instance& instance, const int start_n
     }
 
     std::vector<int> route = buildInitialRoute(instance, start_node);
+    const std::vector<int> initial_route = route;
     const int unique_count = static_cast<int>(route.size()) - 1;
 
     std::vector<bool> is_visited(static_cast<size_t>(instance.getNumVertices()), false);
@@ -48,6 +49,7 @@ SolveResult LocalSearchSolver::solve(const Instance& instance, const int start_n
     int current_distance = computeRouteDistance(instance, route);
 
     SolveResult result;
+    result.initial_path = initial_route;
     result.path = route;
     result.phase1_distance = current_distance;
     result.phase1_profit = computeRouteProfit(instance, route);
@@ -91,6 +93,7 @@ SolveResult LocalSearchSolver::solveRandomWalk(const Instance& instance, const i
     const auto t0 = std::chrono::high_resolution_clock::now();
 
     std::vector<int> route = buildInitialRoute(instance, start_node);
+    const std::vector<int> initial_route = route;
     const int unique_count = static_cast<int>(route.size()) - 1;
 
     std::vector<bool> is_visited(static_cast<size_t>(instance.getNumVertices()), false);
@@ -127,6 +130,7 @@ SolveResult LocalSearchSolver::solveRandomWalk(const Instance& instance, const i
     }
 
     SolveResult result;
+    result.initial_path = initial_route;
     result.path = best_route;
     result.phase1_distance = initial_distance;
     result.phase1_profit = initial_profit;
@@ -154,7 +158,7 @@ std::vector<int> LocalSearchSolver::buildInitialRoute(const Instance& instance, 
         return buildRandomInitialRoute(instance, start_node, target_size);
     }
     if (initial_solution_type_ == "heuristic") {
-        return buildGreedyInitialRoute(instance, start_node, target_size);
+        return buildRegretInitialRoute(instance, start_node, target_size);
     }
 
     throw std::runtime_error("Unknown initial_solution_type: " + initial_solution_type_ + ". Expected random or heuristic");
@@ -181,7 +185,7 @@ std::vector<int> LocalSearchSolver::buildRandomInitialRoute(const Instance& inst
     return route;
 }
 
-std::vector<int> LocalSearchSolver::buildGreedyInitialRoute(const Instance& instance, const int start_node, const int target_size) const {
+std::vector<int> LocalSearchSolver::buildRegretInitialRoute(const Instance& instance, const int start_node, const int target_size) const {
     const int n = instance.getNumVertices();
     std::vector<bool> visited(static_cast<size_t>(n), false);
     visited[static_cast<size_t>(start_node)] = true;
@@ -209,21 +213,49 @@ std::vector<int> LocalSearchSolver::buildGreedyInitialRoute(const Instance& inst
     while (static_cast<int>(route.size()) - 1 < target_size) {
         int best_node = -1;
         int best_pos = -1;
-        int best_delta = std::numeric_limits<int>::max();
+        int best_insert_value_overall = std::numeric_limits<int>::lowest();
+        int best_regret_overall = std::numeric_limits<int>::lowest();
 
         for (int v = 0; v < n; ++v) {
             if (visited[static_cast<size_t>(v)]) {
                 continue;
             }
+
+            int best_insert_value = std::numeric_limits<int>::lowest();
+            int second_best_insert_value = std::numeric_limits<int>::lowest();
+            int best_insert_pos = -1;
+
             for (int i = 0; i + 1 < static_cast<int>(route.size()); ++i) {
                 const int a = route[static_cast<size_t>(i)];
                 const int b = route[static_cast<size_t>(i + 1)];
                 const int delta = instance.getDistance(a, v) + instance.getDistance(v, b) - instance.getDistance(a, b);
-                if (delta < best_delta) {
-                    best_delta = delta;
-                    best_node = v;
-                    best_pos = i;
+
+                // 2-regret without costs from Lab 1: insertion value is based only on distance delta.
+                const int insertion_value = -delta;
+                if (insertion_value > best_insert_value) {
+                    second_best_insert_value = best_insert_value;
+                    best_insert_value = insertion_value;
+                    best_insert_pos = i;
+                } else if (insertion_value > second_best_insert_value) {
+                    second_best_insert_value = insertion_value;
                 }
+            }
+
+            if (best_insert_pos < 0) {
+                continue;
+            }
+
+            if (second_best_insert_value == std::numeric_limits<int>::lowest()) {
+                second_best_insert_value = best_insert_value;
+            }
+
+            const int regret = best_insert_value - second_best_insert_value;
+            if (regret > best_regret_overall ||
+                (regret == best_regret_overall && best_insert_value > best_insert_value_overall)) {
+                best_regret_overall = regret;
+                best_insert_value_overall = best_insert_value;
+                best_node = v;
+                best_pos = best_insert_pos;
             }
         }
 

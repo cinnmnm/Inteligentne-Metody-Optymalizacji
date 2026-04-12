@@ -6,6 +6,11 @@
 
 namespace ResultPrinter {
 
-std::string toJson(const SolveResult& result, const std::string& solver_name, int start_node, int seed);
+std::string toJson(
+	const SolveResult& result,
+	const std::string& solver_name,
+	int start_node,
+	int seed,
+	const std::string& lab_name = "");
 
 }  // namespace ResultPrinter

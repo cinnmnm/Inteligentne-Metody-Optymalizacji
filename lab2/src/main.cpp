@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
         }
 
         SolutionChecker::validate(args.instance, result);
-        std::cout << ResultPrinter::toJson(result, args.solver_name, args.start_node, args.seed) << std::endl;
+        std::cout << ResultPrinter::toJson(result, args.solver_name, args.start_node, args.seed, "lab2") << std::endl;
 
         return 0;
     } catch (const std::exception& ex) {

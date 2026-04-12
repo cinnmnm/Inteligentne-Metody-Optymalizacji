@@ -24,7 +24,7 @@ private:
 
     std::vector<int> buildInitialRoute(const Instance& instance, int start_node);
     std::vector<int> buildRandomInitialRoute(const Instance& instance, int start_node, int target_size);
-    std::vector<int> buildGreedyInitialRoute(const Instance& instance, int start_node, int target_size) const;
+    std::vector<int> buildRegretInitialRoute(const Instance& instance, int start_node, int target_size) const;
 
     static int chooseTargetVertexCount(int n);
     static int computeRouteDistance(const Instance& instance, const std::vector<int>& route);
