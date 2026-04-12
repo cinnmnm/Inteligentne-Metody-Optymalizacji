@@ -1,6 +1,6 @@
 #pragma once
 
-enum class MoveType { INTER_SWAP, INTRA_NODE_SWAP, INTRA_EDGE_SWAP };
+enum class MoveType { ADD_NODE, REMOVE_NODE, INTRA_NODE_SWAP, INTRA_EDGE_SWAP };
 
 struct Move {
     MoveType type;

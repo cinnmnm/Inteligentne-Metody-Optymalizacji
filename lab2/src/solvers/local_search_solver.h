@@ -25,6 +25,7 @@ private:
     std::vector<int> buildInitialRoute(const Instance& instance, int start_node);
     std::vector<int> buildRandomInitialRoute(const Instance& instance, int start_node, int target_size);
     std::vector<int> buildRegretInitialRoute(const Instance& instance, int start_node, int target_size) const;
+    void runInitialRemovalPhase(const Instance& instance, std::vector<int>& route) const;
 
     static int chooseTargetVertexCount(int n);
     static int computeRouteDistance(const Instance& instance, const std::vector<int>& route);
@@ -32,7 +33,8 @@ private:
 
     std::vector<Move> generateNeighborhood(const Instance& instance, const std::vector<int>& route, const std::vector<bool>& is_visited) const;
 
-    double calculateInterSwapDelta(const Instance& instance, const std::vector<int>& route, int route_idx, int unvisited_node) const;
+    double calculateAddNodeDelta(const Instance& instance, const std::vector<int>& route, int edge_idx, int new_node) const;
+    double calculateRemoveNodeDelta(const Instance& instance, const std::vector<int>& route, int route_idx) const;
     double calculateIntraNodeSwapDelta(const Instance& instance, const std::vector<int>& route, int idx1, int idx2) const;
     double calculateIntraEdgeSwapDelta(const Instance& instance, const std::vector<int>& route, int idx1, int idx2) const;
 

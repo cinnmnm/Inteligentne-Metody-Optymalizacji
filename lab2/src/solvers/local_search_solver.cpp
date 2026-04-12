@@ -1,6 +1,7 @@
 #include "local_search_solver.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <limits>
@@ -47,13 +48,14 @@ SolveResult LocalSearchSolver::solve(const Instance& instance, const int start_n
     }
 
     int current_distance = computeRouteDistance(instance, route);
+    int current_profit = computeRouteProfit(instance, route);
 
     SolveResult result;
     result.initial_path = initial_route;
     result.path = route;
     result.phase1_distance = current_distance;
-    result.phase1_profit = computeRouteProfit(instance, route);
-    result.phase1_objective = -result.phase1_distance;
+    result.phase1_profit = current_profit;
+    result.phase1_objective = result.phase1_profit - result.phase1_distance;
 
     while (true) {
         Move chosen{};
@@ -72,13 +74,14 @@ SolveResult LocalSearchSolver::solve(const Instance& instance, const int start_n
         }
 
         applyMove(route, is_visited, chosen);
-        current_distance += static_cast<int>(std::lround(chosen.delta));
+        current_distance = computeRouteDistance(instance, route);
+        current_profit = computeRouteProfit(instance, route);
     }
 
     result.path = route;
     result.phase2_distance = current_distance;
-    result.phase2_profit = computeRouteProfit(instance, route);
-    result.final_objective = -result.phase2_distance;
+    result.phase2_profit = current_profit;
+    result.final_objective = result.phase2_profit - result.phase2_distance;
 
     const auto t1 = std::chrono::high_resolution_clock::now();
     result.time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
@@ -105,7 +108,10 @@ SolveResult LocalSearchSolver::solveRandomWalk(const Instance& instance, const i
     const int initial_profit = computeRouteProfit(instance, route);
 
     int current_distance = initial_distance;
+    int current_profit = initial_profit;
     int best_distance = current_distance;
+    int best_profit = current_profit;
+    int best_objective = best_profit - best_distance;
     std::vector<int> best_route = route;
 
     while (true) {
@@ -116,15 +122,19 @@ SolveResult LocalSearchSolver::solveRandomWalk(const Instance& instance, const i
         }
 
         const Move move = sampleRandomMove(instance, route, is_visited);
-        if (move.type == MoveType::INTER_SWAP && move.index1 < 0) {
+        if (move.index1 < 0) {
             break;
         }
 
         applyMove(route, is_visited, move);
-        current_distance += static_cast<int>(std::lround(move.delta));
+        current_distance = computeRouteDistance(instance, route);
+        current_profit = computeRouteProfit(instance, route);
 
-        if (current_distance < best_distance) {
+        const int current_objective = current_profit - current_distance;
+        if (current_objective > best_objective) {
             best_distance = current_distance;
+            best_profit = current_profit;
+            best_objective = current_objective;
             best_route = route;
         }
     }
@@ -134,10 +144,10 @@ SolveResult LocalSearchSolver::solveRandomWalk(const Instance& instance, const i
     result.path = best_route;
     result.phase1_distance = initial_distance;
     result.phase1_profit = initial_profit;
-    result.phase1_objective = -result.phase1_distance;
+    result.phase1_objective = result.phase1_profit - result.phase1_distance;
     result.phase2_distance = best_distance;
-    result.phase2_profit = computeRouteProfit(instance, best_route);
-    result.final_objective = -result.phase2_distance;
+    result.phase2_profit = best_profit;
+    result.final_objective = best_objective;
     result.time_ms = std::chrono::duration<double, std::milli>(std::chrono::high_resolution_clock::now() - t0).count();
 
     return result;
@@ -153,12 +163,14 @@ std::vector<int> LocalSearchSolver::buildInitialRoute(const Instance& instance, 
         throw std::runtime_error("Instance must contain at least 3 vertices");
     }
 
-    const int target_size = std::min(chooseTargetVertexCount(n), n);
     if (initial_solution_type_ == "random") {
+        const int target_size = std::min(chooseTargetVertexCount(n), n);
         return buildRandomInitialRoute(instance, start_node, target_size);
     }
     if (initial_solution_type_ == "heuristic") {
-        return buildRegretInitialRoute(instance, start_node, target_size);
+        std::vector<int> route = buildRegretInitialRoute(instance, start_node, n);
+        runInitialRemovalPhase(instance, route);
+        return route;
     }
 
     throw std::runtime_error("Unknown initial_solution_type: " + initial_solution_type_ + ". Expected random or heuristic");
@@ -270,6 +282,35 @@ std::vector<int> LocalSearchSolver::buildRegretInitialRoute(const Instance& inst
     return route;
 }
 
+void LocalSearchSolver::runInitialRemovalPhase(const Instance& instance, std::vector<int>& route) const {
+    bool improvement = true;
+    while (improvement && route.size() > 4) {
+        improvement = false;
+        int best_delta_f = 0;
+        int best_index = -1;
+
+        const int m = static_cast<int>(route.size()) - 1;
+        // Keep anchor at index 0 to preserve the requested start node semantics.
+        for (int i = 1; i < m; ++i) {
+            const int prev = route[static_cast<size_t>(prevIndex(i, m))];
+            const int node = route[static_cast<size_t>(i)];
+            const int next = route[static_cast<size_t>(nextIndex(i, m))];
+
+            const int delta_f = instance.getDistance(prev, node) + instance.getDistance(node, next) - instance.getDistance(prev, next) - instance.getProfit(node);
+            if (delta_f > best_delta_f) {
+                best_delta_f = delta_f;
+                best_index = i;
+            }
+        }
+
+        if (best_index > 0 && best_delta_f > 0) {
+            route.erase(route.begin() + best_index);
+            route.back() = route.front();
+            improvement = true;
+        }
+    }
+}
+
 int LocalSearchSolver::computeRouteDistance(const Instance& instance, const std::vector<int>& route) {
     int distance = 0;
     for (int i = 0; i + 1 < static_cast<int>(route.size()); ++i) {
@@ -291,15 +332,24 @@ std::vector<Move> LocalSearchSolver::generateNeighborhood(
     const std::vector<int>& route,
     const std::vector<bool>& is_visited) const {
     const int m = static_cast<int>(route.size()) - 1;
+    const int n = instance.getNumVertices();
     std::vector<Move> moves;
-    moves.reserve(static_cast<size_t>(m * instance.getNumVertices()));
+    moves.reserve(static_cast<size_t>(m * n + std::max(0, m - 1) + m * m));
 
+    // Add one unvisited node into an edge of the current cycle.
     for (int i = 0; i < m; ++i) {
-        for (int node = 0; node < instance.getNumVertices(); ++node) {
+        for (int node = 0; node < n; ++node) {
             if (is_visited[static_cast<size_t>(node)]) {
                 continue;
             }
-            moves.push_back(Move{MoveType::INTER_SWAP, i, node, calculateInterSwapDelta(instance, route, i, node)});
+            moves.push_back(Move{MoveType::ADD_NODE, i, node, calculateAddNodeDelta(instance, route, i, node)});
+        }
+    }
+
+    // Remove one non-anchor node from the cycle (idx 0 is treated as anchor).
+    if (m > 3) {
+        for (int i = 1; i < m; ++i) {
+            moves.push_back(Move{MoveType::REMOVE_NODE, i, -1, calculateRemoveNodeDelta(instance, route, i)});
         }
     }
 
@@ -323,23 +373,48 @@ std::vector<Move> LocalSearchSolver::generateNeighborhood(
     return moves;
 }
 
-double LocalSearchSolver::calculateInterSwapDelta(
+double LocalSearchSolver::calculateAddNodeDelta(
     const Instance& instance,
     const std::vector<int>& route,
-    const int route_idx,
-    const int unvisited_node) const {
+    const int edge_idx,
+    const int new_node) const {
     const int m = static_cast<int>(route.size()) - 1;
+    const int idx_next = nextIndex(edge_idx, m);
+
+    const int prev = route[static_cast<size_t>(edge_idx)];
+    const int next = route[static_cast<size_t>(idx_next)];
+
+    const int added_dist = instance.getDistance(prev, new_node) + instance.getDistance(new_node, next) - instance.getDistance(prev, next);
+    const int added_profit = instance.getProfit(new_node);
+
+    // Delta is represented as a cost to minimize.
+    // Improvement in objective (profit - distance) is: added_profit - added_dist.
+    // Therefore minimized delta is: added_dist - added_profit.
+    return static_cast<double>(added_dist - added_profit);
+}
+
+double LocalSearchSolver::calculateRemoveNodeDelta(
+    const Instance& instance,
+    const std::vector<int>& route,
+    const int route_idx) const {
+    const int m = static_cast<int>(route.size()) - 1;
+    if (route_idx <= 0 || route_idx >= m) {
+        return 0.0;
+    }
+
     const int idx_prev = prevIndex(route_idx, m);
     const int idx_next = nextIndex(route_idx, m);
 
     const int prev = route[static_cast<size_t>(idx_prev)];
-    const int old_node = route[static_cast<size_t>(route_idx)];
+    const int removed_node = route[static_cast<size_t>(route_idx)];
     const int next = route[static_cast<size_t>(idx_next)];
 
-    const int old_cost = instance.getDistance(prev, old_node) + instance.getDistance(old_node, next);
-    const int new_cost = instance.getDistance(prev, unvisited_node) + instance.getDistance(unvisited_node, next);
+    const int removed_dist = instance.getDistance(prev, removed_node) + instance.getDistance(removed_node, next) - instance.getDistance(prev, next);
+    const int removed_profit = instance.getProfit(removed_node);
 
-    return static_cast<double>(new_cost - old_cost);
+    // Improvement in objective is: removed_dist - removed_profit.
+    // Delta as minimized cost is the negative improvement.
+    return static_cast<double>(removed_profit - removed_dist);
 }
 
 double LocalSearchSolver::calculateIntraNodeSwapDelta(
@@ -410,16 +485,20 @@ double LocalSearchSolver::calculateIntraEdgeSwapDelta(
 }
 
 void LocalSearchSolver::applyMove(std::vector<int>& route, std::vector<bool>& is_visited, const Move& move) const {
-    const int m = static_cast<int>(route.size()) - 1;
-
-    if (move.type == MoveType::INTER_SWAP) {
-        const int idx = move.index1;
-        const int old_node = route[static_cast<size_t>(idx)];
+    if (move.type == MoveType::ADD_NODE) {
+        const int edge_idx = move.index1;
         const int new_node = move.index2;
+        const int insert_idx = edge_idx + 1;
 
-        route[static_cast<size_t>(idx)] = new_node;
-        is_visited[static_cast<size_t>(old_node)] = false;
+        route.insert(route.begin() + insert_idx, new_node);
         is_visited[static_cast<size_t>(new_node)] = true;
+    } else if (move.type == MoveType::REMOVE_NODE) {
+        const int remove_idx = move.index1;
+        if (remove_idx > 0 && remove_idx < static_cast<int>(route.size()) - 1) {
+            const int removed_node = route[static_cast<size_t>(remove_idx)];
+            route.erase(route.begin() + remove_idx);
+            is_visited[static_cast<size_t>(removed_node)] = false;
+        }
     } else if (move.type == MoveType::INTRA_NODE_SWAP) {
         std::swap(route[static_cast<size_t>(move.index1)], route[static_cast<size_t>(move.index2)]);
     } else {
@@ -431,7 +510,7 @@ void LocalSearchSolver::applyMove(std::vector<int>& route, std::vector<bool>& is
         std::reverse(route.begin() + i, route.begin() + j + 1);
     }
 
-    route[static_cast<size_t>(m)] = route[0];
+    route.back() = route[0];
 }
 
 Move LocalSearchSolver::findSteepestMove(const std::vector<Move>& neighborhood) const {
@@ -455,39 +534,65 @@ Move LocalSearchSolver::findGreedyMoveLazy(
     const int n = instance.getNumVertices();
 
     if (m <= 0 || n <= 0) {
-        return Move{MoveType::INTER_SWAP, -1, -1, 0.0};
+        return Move{MoveType::ADD_NODE, -1, -1, 0.0};
     }
 
     std::uniform_int_distribution<int> dist_m(0, m - 1);
     std::uniform_int_distribution<int> dist_n(0, n - 1);
     std::uniform_int_distribution<int> dist_dir(0, 1);
-    std::uniform_int_distribution<int> dist_order(0, 1);
+    const auto try_add = [&]() -> Move {
+        const int start_edge = dist_m(rng_);
+        const int dir_edge = dist_dir(rng_) == 1 ? 1 : -1;
+        const int start_node = dist_n(rng_);
+        const int dir_node = dist_dir(rng_) == 1 ? 1 : -1;
 
-    const int start_i = dist_m(rng_);
-    const int dir_i = dist_dir(rng_) == 1 ? 1 : -1;
-    const bool check_inter_first = dist_order(rng_) == 1;
+        for (int step_e = 0; step_e < m; ++step_e) {
+            const int edge_idx = ((start_edge + dir_edge * step_e) % m + m) % m;
+            for (int step_n = 0; step_n < n; ++step_n) {
+                const int node = ((start_node + dir_node * step_n) % n + n) % n;
+                if (is_visited[static_cast<size_t>(node)]) {
+                    continue;
+                }
 
-    for (int step_i = 0; step_i < m; ++step_i) {
-        const int i = ((start_i + dir_i * step_i) % m + m) % m;
-
-        const int start_j = dist_m(rng_);
-        const int start_j_inter = dist_n(rng_);
-        const int dir_j = dist_dir(rng_) == 1 ? 1 : -1;
-
-        const auto check_inter = [&]() -> Move {
-            for (int step_j = 0; step_j < n; ++step_j) {
-                const int j = ((start_j_inter + dir_j * step_j) % n + n) % n;
-                if (!is_visited[static_cast<size_t>(j)]) {
-                    const double delta = calculateInterSwapDelta(instance, route, i, j);
-                    if (delta < 0.0) {
-                        return Move{MoveType::INTER_SWAP, i, j, delta};
-                    }
+                const double delta = calculateAddNodeDelta(instance, route, edge_idx, node);
+                if (delta < 0.0) {
+                    return Move{MoveType::ADD_NODE, edge_idx, node, delta};
                 }
             }
-            return Move{MoveType::INTER_SWAP, -1, -1, 0.0};
-        };
+        }
 
-        const auto check_intra = [&]() -> Move {
+        return Move{MoveType::ADD_NODE, -1, -1, 0.0};
+    };
+
+    const auto try_remove = [&]() -> Move {
+        if (m <= 3) {
+            return Move{MoveType::REMOVE_NODE, -1, -1, 0.0};
+        }
+
+        std::uniform_int_distribution<int> dist_rm(0, m - 2);  // maps to [1, m-1]
+        const int start_idx = dist_rm(rng_);
+        const int dir = dist_dir(rng_) == 1 ? 1 : -1;
+
+        for (int step = 0; step < m - 1; ++step) {
+            const int idx = 1 + ((start_idx + dir * step) % (m - 1) + (m - 1)) % (m - 1);
+            const double delta = calculateRemoveNodeDelta(instance, route, idx);
+            if (delta < 0.0) {
+                return Move{MoveType::REMOVE_NODE, idx, -1, delta};
+            }
+        }
+
+        return Move{MoveType::REMOVE_NODE, -1, -1, 0.0};
+    };
+
+    const auto try_intra = [&]() -> Move {
+        const int start_i = dist_m(rng_);
+        const int dir_i = dist_dir(rng_) == 1 ? 1 : -1;
+
+        for (int step_i = 0; step_i < m; ++step_i) {
+            const int i = ((start_i + dir_i * step_i) % m + m) % m;
+            const int start_j = dist_m(rng_);
+            const int dir_j = dist_dir(rng_) == 1 ? 1 : -1;
+
             for (int step_j = 0; step_j < m; ++step_j) {
                 const int j = ((start_j + dir_j * step_j) % m + m) % m;
                 if (i == j) {
@@ -509,35 +614,31 @@ Move LocalSearchSolver::findGreedyMoveLazy(
                     }
                 }
             }
+        }
 
-            const MoveType no_improve_type = use_edge_swap_ ? MoveType::INTRA_EDGE_SWAP : MoveType::INTRA_NODE_SWAP;
-            return Move{no_improve_type, -1, -1, 0.0};
-        };
+        const MoveType no_improve_type = use_edge_swap_ ? MoveType::INTRA_EDGE_SWAP : MoveType::INTRA_NODE_SWAP;
+        return Move{no_improve_type, -1, -1, 0.0};
+    };
 
-        if (check_inter_first) {
-            const Move inter_move = check_inter();
-            if (inter_move.delta < 0.0) {
-                return inter_move;
-            }
+    std::array<int, 3> move_order{0, 1, 2};  // add, remove, intra
+    std::shuffle(move_order.begin(), move_order.end(), rng_);
 
-            const Move intra_move = check_intra();
-            if (intra_move.delta < 0.0) {
-                return intra_move;
-            }
+    for (const int move_kind : move_order) {
+        Move candidate{};
+        if (move_kind == 0) {
+            candidate = try_add();
+        } else if (move_kind == 1) {
+            candidate = try_remove();
         } else {
-            const Move intra_move = check_intra();
-            if (intra_move.delta < 0.0) {
-                return intra_move;
-            }
+            candidate = try_intra();
+        }
 
-            const Move inter_move = check_inter();
-            if (inter_move.delta < 0.0) {
-                return inter_move;
-            }
+        if (candidate.delta < 0.0) {
+            return candidate;
         }
     }
 
-    return Move{MoveType::INTER_SWAP, -1, -1, 0.0};
+    return Move{MoveType::ADD_NODE, -1, -1, 0.0};
 }
 
 Move LocalSearchSolver::sampleRandomMove(
@@ -546,7 +647,7 @@ Move LocalSearchSolver::sampleRandomMove(
     const std::vector<bool>& is_visited) {
     std::vector<Move> neighborhood = generateNeighborhood(instance, route, is_visited);
     if (neighborhood.empty()) {
-        return Move{MoveType::INTER_SWAP, -1, -1, 0.0};
+        return Move{MoveType::ADD_NODE, -1, -1, 0.0};
     }
     std::uniform_int_distribution<int> dist(0, static_cast<int>(neighborhood.size()) - 1);
     return neighborhood[static_cast<size_t>(dist(rng_))];
