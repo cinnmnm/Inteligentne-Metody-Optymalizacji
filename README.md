@@ -9,6 +9,7 @@ Projekt oparty jest na architekturze modułowej (monorepo), co pozwala na wspó�
 * **`common/`** - Współdzielona biblioteka (nagłówki i źródła). Zawiera m.in. struktury danych dla instancji problemu, interfejsy solverów, sprawdzanie poprawności rozwiązań (Solution Checker) oraz operacje We/Wy (parsowanie CSV, eksport do JSON).
 * **`lab1/`** - Zadanie 1: Heurystyki konstrukcyjne. Zawiera implementacje algorytmów takich jak: Random, Nearest Neighbor, Greedy Cycle, Regret Heuristics.
 * **`lab2/`** - Zadanie 2: Lokalne przeszukiwanie (Steepest, Greedy) z różnymi definicjami sąsiedztwa (wymiana wierzchołków, wymiana krawędzi).
+* **`lab3/`** - Zadanie 3: Wykorzystanie ocen ruchów z poprzednich iteracji i ruchów kandydackich w lokalnym przeszukiwaniu.
 * **`instances/`** - Pliki wejściowe CSV reprezentujące instancje problemu (np. `TSPA.csv`, `TSPB.csv`).
 * **`scripts/`** - Narzędzia w Pythonie służące do masowego uruchamiania eksperymentów, zbierania logów, generowania statystyk oraz wizualizacji tras na wykresach.
 * **`results/`** - Wygenerowane wyniki eksperymentów (tabele CSV, dane JSON) oraz wizualizacje tras (PNG), podzielone na podkatalogi dla każdego z laboratoriów.
