@@ -9,6 +9,42 @@ from experiment_runner import ExperimentRunner, build_execution_plan, save_resul
 from plot_results import generate_best_solution_plots
 
 
+LAB1_SOLVERS = [
+    "random",
+    "nearest_neighbor",
+    "nearest_neighbor_profit",
+    "greedy_cycle",
+    "greedy_cycle_profit",
+    "regret",
+    "weighted_regret",
+]
+
+LAB2_LOCAL_SEARCH_SOLVERS = [
+    "steepest_node",
+    "steepest_edge",
+    "greedy_node",
+    "greedy_edge",
+]
+
+LAB3_SOLVERS = [
+    "candidate",
+    "list_memory",
+    "hybrid",
+    "lazy_pq",
+]
+
+
+def validate_lab_name(lab_name: str) -> None:
+    if lab_name == "lab1":
+        return
+    elif lab_name == "lab2":
+        return
+    elif lab_name == "lab3":
+        return
+    else:
+        raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
+
+
 def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
     group_cols = ["instance", "solver"]
 
@@ -28,7 +64,7 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
             )
         )
 
-    if lab_name == "lab2":
+    elif lab_name == "lab2":
         return (
             df.groupby(group_cols, as_index=False)
             .agg(
@@ -39,21 +75,34 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
                 mean_time_ms=("time_ms", "mean"),
             )
         )
-
-    return (
-        df.groupby(group_cols, as_index=False)
-        .agg(
-            min_final_objective=("final_objective", "min"),
-            max_final_objective=("final_objective", "max"),
-            mean_final_objective=("final_objective", "mean"),
-            mean_time_ms=("time_ms", "mean"),
+    elif lab_name == "lab3":
+        return (
+            df.groupby(group_cols, as_index=False)
+            .agg(
+                min_final_objective=("final_objective", "min"),
+                max_final_objective=("final_objective", "max"),
+                mean_final_objective=("final_objective", "mean"),
+                mean_time_ms=("time_ms", "mean"),
+            )
         )
-    )
+    else:
+        raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
+
+
+def resolve_results_dir(root: Path, lab_name: str, initial_solution_type: str) -> Path:
+    if lab_name == "lab1":
+        return root / "results" / lab_name
+    elif lab_name == "lab2":
+        return root / "results" / lab_name / initial_solution_type
+    elif lab_name == "lab3":
+        return root / "results" / lab_name
+    else:
+        raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run experiments for selected lab and save outputs.")
-    parser.add_argument("--lab", default="lab1", help="Lab name, e.g. lab1, lab2")
+    parser.add_argument("--lab", default="lab1", help="Lab name, e.g. lab1, lab2, lab3")
     parser.add_argument("--runs-per-instance", type=int, default=1, help="Number of runs per (instance, solver, start node)")
     parser.add_argument("--start-nodes-per-instance", type=int, default=100, help="Number of random start nodes per instance")
     parser.add_argument(
@@ -69,6 +118,7 @@ def main() -> None:
         help="Optional fixed random walk budget in ms; if omitted for lab2, uses slowest LS average time",
     )
     args = parser.parse_args()
+    validate_lab_name(args.lab)
 
     root = Path(__file__).resolve().parent.parent
     binary_name = f"solver_{args.lab}"
@@ -90,7 +140,17 @@ def main() -> None:
         "TSPB": root / "instances" / "TSPB.csv",
     }
 
-    if args.lab == "lab2":
+    if args.lab == "lab1":
+        runner = ExperimentRunner(
+            binary_path=binary_path,
+            instances=instances,
+            solvers=LAB1_SOLVERS,
+            runs_per_instance=args.runs_per_instance,
+            start_nodes_per_instance=args.start_nodes_per_instance,
+            seed=8008136745555,
+        )
+        df = runner.run()
+    elif args.lab == "lab2":
         execution_plan = build_execution_plan(
             instances=instances,
             start_nodes_per_instance=args.start_nodes_per_instance,
@@ -98,21 +158,14 @@ def main() -> None:
             seed=8008136745555,
         )
 
-        ls_solvers = [
-            "steepest_node",
-            "steepest_edge",
-            "greedy_node",
-            "greedy_edge",
-        ]
-
         runner_ls = ExperimentRunner(
             binary_path=binary_path,
             instances=instances,
-            solvers=ls_solvers,
+            solvers=LAB2_LOCAL_SEARCH_SOLVERS,
             runs_per_instance=args.runs_per_instance,
             start_nodes_per_instance=args.start_nodes_per_instance,
             seed=8008136745555,
-            solver_extra_args={solver: [args.initial_solution_type] for solver in ls_solvers},
+            solver_extra_args={solver: [args.initial_solution_type] for solver in LAB2_LOCAL_SEARCH_SOLVERS},
             execution_plan=execution_plan,
         )
 
@@ -139,30 +192,20 @@ def main() -> None:
 
         df_rw = runner_rw.run()
         df = df_ls if df_rw.empty else pd.concat([df_ls, df_rw], ignore_index=True)
-    else:
-        solvers = [
-            "random",
-            "nearest_neighbor",
-            "nearest_neighbor_profit",
-            "greedy_cycle",
-            "greedy_cycle_profit",
-            "regret",
-            "weighted_regret",
-        ]
+    elif args.lab == "lab3":
         runner = ExperimentRunner(
             binary_path=binary_path,
             instances=instances,
-            solvers=solvers,
+            solvers=LAB3_SOLVERS,
             runs_per_instance=args.runs_per_instance,
             start_nodes_per_instance=args.start_nodes_per_instance,
             seed=8008136745555,
         )
         df = runner.run()
-
-    if args.lab == "lab2":
-        results_dir = root / "results" / args.lab / args.initial_solution_type
     else:
-        results_dir = root / "results" / args.lab
+        raise ValueError(f"Unsupported lab name: {args.lab}. Expected lab1, lab2, lab3, etc.")
+
+    results_dir = resolve_results_dir(root, args.lab, args.initial_solution_type)
     csv_path, json_path = save_results(df, results_dir)
 
     summary_df = build_report_summary(df, args.lab)

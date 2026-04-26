@@ -18,6 +18,20 @@ def _parse_path(value):
     return None
 
 
+def resolve_results_dir(root: Path, lab_name: str, results_dir: str | None, initial_solution_type: str) -> Path:
+    if results_dir:
+        return Path(results_dir)
+
+    if lab_name == "lab1":
+        return root / "results" / lab_name
+    elif lab_name == "lab2":
+        return root / "results" / lab_name / initial_solution_type
+    elif lab_name == "lab3":
+        return root / "results" / lab_name
+    else:
+        raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
+
+
 def generate_best_solution_plots(df: pd.DataFrame, instances: dict[str, Path], results_dir: Path) -> None:
     print("\nGenerowanie wizualizacji...")
     has_initial_path = "initial_path" in df.columns
@@ -63,12 +77,18 @@ def generate_best_solution_plots(df: pd.DataFrame, instances: dict[str, Path], r
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate visualizations from experiment results.")
-    parser.add_argument("--lab", default="lab1", help="Lab name, e.g. lab1, lab2")
+    parser.add_argument("--lab", default="lab1", help="Lab name, e.g. lab1, lab2, lab3")
     parser.add_argument("--results-dir", default=None, help="Optional explicit path to results directory")
+    parser.add_argument(
+        "--initial-solution-type",
+        default="heuristic",
+        choices=["random", "heuristic"],
+        help="Only used when resolving default lab2 results path",
+    )
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parent.parent
-    results_dir = Path(args.results_dir) if args.results_dir else root / "results" / args.lab
+    results_dir = resolve_results_dir(root, args.lab, args.results_dir, args.initial_solution_type)
     csv_path = results_dir / "experiment_results.csv"
 
     if not csv_path.exists():
