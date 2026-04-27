@@ -57,8 +57,6 @@ SolveResult ListMemoryLocalSearchSolver::solve(const Instance& instance, const i
             move.delta = current_delta;
 
             if (applyMove(state, move)) {
-                current_distance = computeRouteDistance(instance, state.route);
-                current_profit = computeRouteProfit(instance, state.route);
                 applied = true;
                 break;
             }
@@ -68,6 +66,9 @@ SolveResult ListMemoryLocalSearchSolver::solve(const Instance& instance, const i
             lm.clear();
         }
     }
+
+    current_distance = computeRouteDistance(instance, state.route);
+    current_profit = computeRouteProfit(instance, state.route);
 
     result.path = state.route;
     result.phase2_distance = current_distance;

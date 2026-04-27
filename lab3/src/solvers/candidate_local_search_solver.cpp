@@ -49,10 +49,10 @@ SolveResult CandidateLocalSearchSolver::solve(const Instance& instance, const in
         if (!applyMove(state, *best_it)) {
             break;
         }
-
-        current_distance = computeRouteDistance(instance, state.route);
-        current_profit = computeRouteProfit(instance, state.route);
     }
+
+    current_distance = computeRouteDistance(instance, state.route);
+    current_profit = computeRouteProfit(instance, state.route);
 
     result.path = state.route;
     result.phase2_distance = current_distance;

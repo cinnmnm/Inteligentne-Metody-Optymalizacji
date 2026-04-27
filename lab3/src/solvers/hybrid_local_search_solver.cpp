@@ -58,8 +58,6 @@ SolveResult HybridLocalSearchSolver::solve(const Instance& instance, const int s
             move.delta = current_delta;
 
             if (applyMove(state, move)) {
-                current_distance = computeRouteDistance(instance, state.route);
-                current_profit = computeRouteProfit(instance, state.route);
                 applied = true;
                 break;
             }
@@ -69,6 +67,9 @@ SolveResult HybridLocalSearchSolver::solve(const Instance& instance, const int s
             lm.clear();
         }
     }
+
+    current_distance = computeRouteDistance(instance, state.route);
+    current_profit = computeRouteProfit(instance, state.route);
 
     result.path = state.route;
     result.phase2_distance = current_distance;

@@ -72,11 +72,11 @@ SolveResult LazyPriorityQueueLocalSearchSolver::solve(const Instance& instance, 
         }
 
         move.delta = new_delta;
-        if (applyMove(state, move)) {
-            current_distance = computeRouteDistance(instance, state.route);
-            current_profit = computeRouteProfit(instance, state.route);
-        }
+        applyMove(state, move);
     }
+
+    current_distance = computeRouteDistance(instance, state.route);
+    current_profit = computeRouteProfit(instance, state.route);
 
     result.path = state.route;
     result.phase2_distance = current_distance;
