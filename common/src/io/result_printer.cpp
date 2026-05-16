@@ -161,6 +161,8 @@ std::string toJson(
     appendIntField(out, is_first, "phase1_objective", result.phase1_objective);
     appendIntField(out, is_first, "phase2_distance", result.phase2_distance);
     appendIntField(out, is_first, "phase2_profit", result.phase2_profit);
+    // Metaheuristic diagnostics
+    appendIntField(out, is_first, "perturbations", result.iterations);
     out << "}";
 
     return out.str();
