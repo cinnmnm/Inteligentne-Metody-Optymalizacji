@@ -18,23 +18,24 @@ int main(int argc, char* argv[]) {
             argc,
             argv,
             5,
-            7,
-            "./solver <path_to_instance> <solver_name> <start_node> <seed> [ignored_initial_solution_type] [max_time_ms]");
+            8,
+            "./solver <path_to_instance> <solver_name> <start_node> <seed> [ignored_initial_solution_type] [max_time_ms] [candidate_k]");
 
         const int max_time_ms = (argc >= 7) ? SolverCli::parseIntArg(argv[6], "max_time_ms") : 1000;
+        const int candidate_k = (argc >= 8) ? SolverCli::parseIntArg(argv[7], "candidate_k") : 10;
 
         SolveResult result;
         if (args.solver_name == "candidate") {
-            CandidateLocalSearchSolver solver(args.seed, max_time_ms);
+            CandidateLocalSearchSolver solver(args.seed, max_time_ms, candidate_k);
             result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "list_memory") {
-            ListMemoryLocalSearchSolver solver(args.seed, max_time_ms);
+            ListMemoryLocalSearchSolver solver(args.seed, max_time_ms, candidate_k);
             result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "hybrid") {
-            HybridLocalSearchSolver solver(args.seed, max_time_ms);
+            HybridLocalSearchSolver solver(args.seed, max_time_ms, candidate_k);
             result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "lazy_pq") {
-            LazyPriorityQueueLocalSearchSolver solver(args.seed, max_time_ms);
+            LazyPriorityQueueLocalSearchSolver solver(args.seed, max_time_ms, candidate_k);
             result = solver.solve(args.instance, args.start_node);
         } else {
             std::cerr << "Unknown solver: " << args.solver_name << std::endl;
