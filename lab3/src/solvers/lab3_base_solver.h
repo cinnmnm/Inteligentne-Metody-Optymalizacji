@@ -48,6 +48,7 @@ protected:
 private:
     int candidate_k_;
     std::vector<std::vector<unsigned char>> candidate_matrix_;
+    std::vector<std::vector<int>> candidate_neighbors_;
 
     static int nextIndex(int idx, int size);
     static int prevIndex(int idx, int size);

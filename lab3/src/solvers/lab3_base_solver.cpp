@@ -108,6 +108,7 @@ int Lab3BaseSolver::computeRouteProfit(const Instance& instance, const std::vect
 void Lab3BaseSolver::initializeCandidateMatrix(const Instance& instance) {
     const int n = instance.getNumVertices();
     candidate_matrix_.assign(static_cast<size_t>(n), std::vector<unsigned char>(static_cast<size_t>(n), 0));
+    candidate_neighbors_.assign(static_cast<size_t>(n), std::vector<int>());
     const int effective_k = std::max(0, std::min(candidate_k_, n - 1));
 
     std::vector<int> vertices(static_cast<size_t>(n));
@@ -134,7 +135,14 @@ void Lab3BaseSolver::initializeCandidateMatrix(const Instance& instance) {
         for (int i = 0; i < effective_k; ++i) {
             int neighbor = order[static_cast<size_t>(i)];
             candidate_matrix_[static_cast<size_t>(u)][static_cast<size_t>(neighbor)] = 1;
-            candidate_matrix_[static_cast<size_t>(neighbor)][static_cast<size_t>(u)] = 1;
+        }
+    }
+
+    for (int u = 0; u < n; ++u) {
+        for (int v = 0; v < n; ++v) {
+            if (candidate_matrix_[static_cast<size_t>(u)][static_cast<size_t>(v)]) {
+                candidate_neighbors_[static_cast<size_t>(u)].push_back(v);
+            }
         }
     }
 }
@@ -220,21 +228,57 @@ std::vector<MemoryMove> Lab3BaseSolver::collectImprovingMoves(
     const int n = instance.getNumVertices();
     const int m = static_cast<int>(state.route.size()) - 1;
 
-    for (int i = 0; i < m; ++i) {
-        const int u = state.route[static_cast<size_t>(i)];
-        const int w = state.route[static_cast<size_t>(i + 1)];
-
-        for (int v = 0; v < n; ++v) {
-            if (state.is_visited[static_cast<size_t>(v)]) {
-                continue;
+    if (config.use_candidate_filter) {
+        std::vector<int> unvisited;
+        unvisited.reserve(static_cast<size_t>(n - m));
+        for (int i = 0; i < n; ++i) {
+            if (!state.is_visited[static_cast<size_t>(i)]) {
+                unvisited.push_back(i);
             }
-            if (config.use_candidate_filter && !isCandidateNeighbor(u, v) && !isCandidateNeighbor(w, v)) {
-                continue;
-            }
+        }
 
-            const double delta = calculateAddNodeDelta(instance, state.route, i, v);
-            if (delta < 0.0) {
-                moves.push_back(MemoryMove{MemoryMoveType::ADD_NODE, u, v, w, -1, delta});
+        std::vector<int> edge_checked(static_cast<size_t>(m), -1);
+        for (int v : unvisited) {
+            for (int c : candidate_neighbors_[static_cast<size_t>(v)]) {
+                if (!state.is_visited[static_cast<size_t>(c)]) {
+                    continue;
+                }
+                const int pos_c = state.position_by_id[static_cast<size_t>(c)];
+
+                if (edge_checked[static_cast<size_t>(pos_c)] != v) {
+                    edge_checked[static_cast<size_t>(pos_c)] = v;
+                    const double delta1 = calculateAddNodeDelta(instance, state.route, pos_c, v);
+                    if (delta1 < 0.0) {
+                        const int w = state.route[static_cast<size_t>(pos_c + 1)];
+                        moves.push_back(MemoryMove{MemoryMoveType::ADD_NODE, c, v, w, -1, delta1});
+                    }
+                }
+
+                const int pos_prev = prevIndex(pos_c, m);
+                if (edge_checked[static_cast<size_t>(pos_prev)] != v) {
+                    edge_checked[static_cast<size_t>(pos_prev)] = v;
+                    const double delta2 = calculateAddNodeDelta(instance, state.route, pos_prev, v);
+                    if (delta2 < 0.0) {
+                        const int u = state.route[static_cast<size_t>(pos_prev)];
+                        moves.push_back(MemoryMove{MemoryMoveType::ADD_NODE, u, v, c, -1, delta2});
+                    }
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < m; ++i) {
+            const int u = state.route[static_cast<size_t>(i)];
+            const int w = state.route[static_cast<size_t>(i + 1)];
+
+            for (int v = 0; v < n; ++v) {
+                if (state.is_visited[static_cast<size_t>(v)]) {
+                    continue;
+                }
+
+                const double delta = calculateAddNodeDelta(instance, state.route, i, v);
+                if (delta < 0.0) {
+                    moves.push_back(MemoryMove{MemoryMoveType::ADD_NODE, u, v, w, -1, delta});
+                }
             }
         }
     }
@@ -251,24 +295,64 @@ std::vector<MemoryMove> Lab3BaseSolver::collectImprovingMoves(
         }
     }
 
-    for (int i = 0; i < m; ++i) {
-        for (int j = i + 1; j < m; ++j) {
-            if (nextIndex(i, m) == j || nextIndex(j, m) == i) {
-                continue;
-            }
-
+    if (config.use_candidate_filter) {
+        for (int i = 0; i < m; ++i) {
             const int a = state.route[static_cast<size_t>(i)];
             const int b = state.route[static_cast<size_t>(i + 1)];
-            const int c = state.route[static_cast<size_t>(j)];
-            const int d = state.route[static_cast<size_t>(j + 1)];
 
-            if (config.use_candidate_filter && !isCandidateNeighbor(a, c) && !isCandidateNeighbor(b, d)) {
-                continue;
+            for (int c : candidate_neighbors_[static_cast<size_t>(a)]) {
+                if (!state.is_visited[static_cast<size_t>(c)]) {
+                    continue;
+                }
+                const int j = state.position_by_id[static_cast<size_t>(c)];
+                if (j <= i + 1 || (i == 0 && j == m - 1)) {
+                    continue;
+                }
+
+                const double delta = calculateIntraEdgeSwapDelta(instance, state.route, i, j);
+                if (delta < 0.0) {
+                    const int d = state.route[static_cast<size_t>(j + 1)];
+                    moves.push_back(MemoryMove{MemoryMoveType::EDGE_SWAP, a, b, c, d, delta});
+                }
             }
 
-            const double delta = calculateIntraEdgeSwapDelta(instance, state.route, i, j);
-            if (delta < 0.0) {
-                moves.push_back(MemoryMove{MemoryMoveType::EDGE_SWAP, a, b, c, d, delta});
+            for (int d : candidate_neighbors_[static_cast<size_t>(b)]) {
+                if (!state.is_visited[static_cast<size_t>(d)]) {
+                    continue;
+                }
+                int j = state.position_by_id[static_cast<size_t>(d)] - 1;
+                if (j < 0) {
+                    j = m - 1;
+                }
+                if (j <= i + 1 || (i == 0 && j == m - 1)) {
+                    continue;
+                }
+
+                const int c = state.route[static_cast<size_t>(j)];
+                if (!isCandidateNeighbor(a, c)) {
+                    const double delta = calculateIntraEdgeSwapDelta(instance, state.route, i, j);
+                    if (delta < 0.0) {
+                        moves.push_back(MemoryMove{MemoryMoveType::EDGE_SWAP, a, b, c, d, delta});
+                    }
+                }
+            }
+        }
+    } else {
+        for (int i = 0; i < m; ++i) {
+            for (int j = i + 1; j < m; ++j) {
+                if (nextIndex(i, m) == j || nextIndex(j, m) == i) {
+                    continue;
+                }
+
+                const int a = state.route[static_cast<size_t>(i)];
+                const int b = state.route[static_cast<size_t>(i + 1)];
+                const int c = state.route[static_cast<size_t>(j)];
+                const int d = state.route[static_cast<size_t>(j + 1)];
+
+                const double delta = calculateIntraEdgeSwapDelta(instance, state.route, i, j);
+                if (delta < 0.0) {
+                    moves.push_back(MemoryMove{MemoryMoveType::EDGE_SWAP, a, b, c, d, delta});
+                }
             }
         }
     }
