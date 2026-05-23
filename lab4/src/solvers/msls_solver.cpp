@@ -24,7 +24,6 @@ void MSLS_Solver::performLocalSearchImprove(const Instance& instance, RouteState
             move.delta = cur_delta;
             if (applyMove(state, move)) {
                 applied = true;
-                break;
             }
         }
         if (!applied) break;
@@ -36,6 +35,8 @@ void MSLS_Solver::performLocalSearchImprove(const Instance& instance, RouteState
 SolveResult MSLS_Solver::solve(const Instance& instance, const int start_node) {
     const auto t0 = std::chrono::high_resolution_clock::now();
     (void)start_node;
+
+    initializeCandidateMatrix(instance);
 
     SolveResult best_result;
     best_result.final_objective = std::numeric_limits<int>::min();
@@ -51,7 +52,7 @@ SolveResult MSLS_Solver::solve(const Instance& instance, const int start_node) {
         int current_distance = computeRouteDistance(instance, state.route);
         int current_profit = computeRouteProfit(instance, state.route);
 
-        const EvalConfig config{false};
+        const EvalConfig config{true};
         performLocalSearchImprove(instance, state, config);
 
         current_distance = computeRouteDistance(instance, state.route);

@@ -5,8 +5,8 @@
 #include <random>
 #include <limits>
 
-LNS_Solver::LNS_Solver(const int seed, const int max_time_ms, const double destroy_fraction)
-    : Lab3BaseSolver(seed), max_time_ms_(max_time_ms), destroy_fraction_(destroy_fraction) {}
+LNS_Solver::LNS_Solver(const int seed, const int max_time_ms, const double destroy_fraction, const bool use_local_search)
+    : Lab3BaseSolver(seed), max_time_ms_(max_time_ms), destroy_fraction_(destroy_fraction), use_local_search_(use_local_search) {}
 
 void LNS_Solver::destroy(Lab3BaseSolver::RouteState& state, std::vector<int>& removed_nodes) {
     removed_nodes.clear();
@@ -87,7 +87,7 @@ void LNS_Solver::repair(const Instance& instance, Lab3BaseSolver::RouteState& st
 }
 
 void LNS_Solver::localSearchImprove(const Instance& instance, RouteState& state) {
-    const EvalConfig config{false};
+    const EvalConfig config{true};
     std::vector<MemoryMove> lm = collectImprovingMoves(instance, state, config);
     if (!lm.empty()) std::sort(lm.begin(), lm.end(), [](const MemoryMove& a, const MemoryMove& b) { return a.delta < b.delta; });
 
@@ -111,8 +111,10 @@ void LNS_Solver::localSearchImprove(const Instance& instance, RouteState& state)
 SolveResult LNS_Solver::solve(const Instance& instance, const int start_node) {
     const auto t0 = std::chrono::high_resolution_clock::now();
 
+    initializeCandidateMatrix(instance);
+
     Lab3BaseSolver::RouteState x = buildInitialState(instance, start_node);
-    {
+    if (use_local_search_) {
         const EvalConfig config{false};
         std::vector<MemoryMove> lm = collectImprovingMoves(instance, x, config);
         if (!lm.empty()) std::sort(lm.begin(), lm.end(), [](const MemoryMove& a, const MemoryMove& b) { return a.delta < b.delta; });
@@ -157,7 +159,9 @@ SolveResult LNS_Solver::solve(const Instance& instance, const int start_node) {
         destroy(y, removed);
         if (removed.empty()) break;
         repair(instance, y, removed);
-        localSearchImprove(instance, y);
+        if (use_local_search_) {
+            localSearchImprove(instance, y);
+        }
 
         int y_dist = computeRouteDistance(instance, y.route);
         int y_profit = computeRouteProfit(instance, y.route);

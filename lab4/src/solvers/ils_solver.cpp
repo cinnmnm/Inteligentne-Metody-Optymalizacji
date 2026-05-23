@@ -54,7 +54,7 @@ void ILS_Solver::smallPerturbation(Lab3BaseSolver::RouteState& state) {
 }
 
 void ILS_Solver::localSearchImprove(const Instance& instance, RouteState& state) {
-    const EvalConfig config{false};
+    const EvalConfig config{true};
     std::vector<MemoryMove> lm = collectImprovingMoves(instance, state, config);
     if (!lm.empty()) std::sort(lm.begin(), lm.end(), [](const MemoryMove& a, const MemoryMove& b) { return a.delta < b.delta; });
 
@@ -80,6 +80,8 @@ void ILS_Solver::localSearchImprove(const Instance& instance, RouteState& state)
 
 SolveResult ILS_Solver::solve(const Instance& instance, const int start_node) {
     const auto t0 = std::chrono::high_resolution_clock::now();
+
+    initializeCandidateMatrix(instance);
 
     Lab3BaseSolver::RouteState x = buildInitialState(instance, start_node);
     localSearchImprove(instance, x);

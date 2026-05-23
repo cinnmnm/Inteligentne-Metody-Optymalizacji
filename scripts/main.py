@@ -39,6 +39,16 @@ LAB4_SOLVERS = [
     "lns",
 ]
 
+LAB6_SOLVERS = [
+    "msls",
+    "ils",
+    "lns",
+    "hae_op1_ls",
+    "hae_op2_ls",
+    "hae_op3_ls",
+    "hae_op2_no_ls",
+    "hae_op3_no_ls",
+]
 
 def validate_lab_name(lab_name: str) -> None:
     if lab_name == "lab1":
@@ -49,6 +59,8 @@ def validate_lab_name(lab_name: str) -> None:
         return
     elif lab_name == "lab4":
         return
+    elif lab_name == "lab6":
+        return
     else:
         raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
 
@@ -58,7 +70,6 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
 
     distance_col = "final_distance" if "final_distance" in df.columns else "phase2_distance"
     profit_col = "final_profit" if "final_profit" in df.columns else "phase2_profit"
-
     if lab_name == "lab1":
         return (
             df.groupby(group_cols, as_index=False)
@@ -69,6 +80,9 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
                 mean_final_profit=(profit_col, "mean"),
                 mean_final_distance=(distance_col, "mean"),
                 mean_time_ms=("time_ms", "mean"),
+                min_iterations=("perturbations", "min"),
+                max_iterations=("perturbations", "max"),
+                mean_iterations=("perturbations", "mean"),
             )
         )
 
@@ -81,9 +95,12 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
                 mean_final_objective=("final_objective", "mean"),
                 mean_final_distance=(distance_col, "mean"),
                 mean_time_ms=("time_ms", "mean"),
+                min_iterations=("perturbations", "min"),
+                max_iterations=("perturbations", "max"),
+                mean_iterations=("perturbations", "mean"),
             )
         )
-    elif lab_name == "lab3" or lab_name == "lab4":
+    elif lab_name == "lab3" or lab_name == "lab4" or lab_name == "lab6":
         return (
             df.groupby(group_cols, as_index=False)
             .agg(
@@ -91,6 +108,9 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
                 max_final_objective=("final_objective", "max"),
                 mean_final_objective=("final_objective", "mean"),
                 mean_time_ms=("time_ms", "mean"),
+                min_iterations=("perturbations", "min"),
+                max_iterations=("perturbations", "max"),
+                mean_iterations=("perturbations", "mean"),
             )
         )
     else:
@@ -104,7 +124,7 @@ def resolve_results_dir(root: Path, lab_name: str, initial_solution_type: str) -
         return root / "results" / lab_name / initial_solution_type
     elif lab_name == "lab3":
         return root / "results" / lab_name
-    elif lab_name == "lab4":
+    elif lab_name == "lab4" or lab_name == "lab6":
         return root / "results" / lab_name
     else:
         raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
@@ -129,6 +149,12 @@ def main() -> None:
     )
     args = parser.parse_args()
     validate_lab_name(args.lab)
+
+    if args.lab in ["lab4", "lab6"]:
+        if args.runs_per_instance == 1:
+            args.runs_per_instance = 20
+        if args.start_nodes_per_instance == 100:
+            args.start_nodes_per_instance = 1
 
     root = Path(__file__).resolve().parent.parent
     binary_name = f"solver_{args.lab}"
@@ -213,32 +239,66 @@ def main() -> None:
         )
         df = runner.run()
     elif args.lab == "lab4":
-        # First run MSLS to measure average time budget
-        runner_msls = ExperimentRunner(
-            binary_path=binary_path,
-            instances=instances,
-            solvers=["msls"],
-            runs_per_instance=args.runs_per_instance,
-            start_nodes_per_instance=1,
-            seed=8008136745555,
-        )
-        df_msls = runner_msls.run()
-        mean_time_ms = max(1, int(round(float(df_msls["time_ms"].mean()))))
+        dfs: list[pd.DataFrame] = []
+        for inst_name, inst_path in instances.items():
+            single_inst = {inst_name: inst_path}
+            runner_msls = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=["msls"],
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+            )
+            df_msls = runner_msls.run()
+            mean_time_ms = max(1, int(round(float(df_msls["time_ms"].mean()))))
+            print(f"\nLab4 timing {inst_name} (MSLS avg time_ms): {mean_time_ms} ms")
 
-        print("\nLab4 timing calibration (MSLS avg time_ms):")
-        print(f" - msls: {mean_time_ms} ms")
+            runner_meta = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=["ils", "lns"],
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+                solver_extra_args={"ils": [str(mean_time_ms)], "lns": [str(mean_time_ms)]},
+            )
+            df_meta = runner_meta.run()
+            dfs.extend([df_msls, df_meta])
+        df = pd.concat(dfs, ignore_index=True)
+    elif args.lab == "lab6":
+        dfs: list[pd.DataFrame] = []
+        for inst_name, inst_path in instances.items():
+            single_inst = {inst_name: inst_path}
 
-        runner_meta = ExperimentRunner(
-            binary_path=binary_path,
-            instances=instances,
-            solvers=["ils", "lns"],
-            runs_per_instance=args.runs_per_instance,
-            start_nodes_per_instance=1,
-            seed=8008136745555,
-            solver_extra_args={"ils": [str(mean_time_ms)], "lns": [str(mean_time_ms)]},
-        )
-        df_meta = runner_meta.run()
-        df = pd.concat([df_msls, df_meta], ignore_index=True)
+            # MSLS to measure timeframe
+            runner_msls = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=["msls"],
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+            )
+            df_msls = runner_msls.run()
+            mean_time_ms = max(1, int(round(float(df_msls["time_ms"].mean()))))
+            print(f"\nLab6 timing {inst_name} (MSLS avg time_ms): {mean_time_ms} ms")
+
+            other_solvers = [s for s in LAB6_SOLVERS if s != "msls"]
+            extra_args = {s: [str(mean_time_ms)] for s in other_solvers}
+
+            runner_meta = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=other_solvers,
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+                solver_extra_args=extra_args,
+            )
+            df_meta = runner_meta.run()
+            dfs.extend([df_msls, df_meta])
+        df = pd.concat(dfs, ignore_index=True)
     else:
         raise ValueError(f"Unsupported lab name: {args.lab}. Expected lab1, lab2, lab3, etc.")
 

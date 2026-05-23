@@ -230,14 +230,15 @@ std::vector<MemoryMove> Lab3BaseSolver::collectImprovingMoves(
 
     if (config.use_candidate_filter) {
         std::vector<int> unvisited;
-        unvisited.reserve(static_cast<size_t>(n - m));
+        const int remaining_slots = std::max(0, n - m);
+        unvisited.reserve(static_cast<size_t>(remaining_slots));
         for (int i = 0; i < n; ++i) {
             if (!state.is_visited[static_cast<size_t>(i)]) {
                 unvisited.push_back(i);
             }
         }
 
-        std::vector<int> edge_checked(static_cast<size_t>(m), -1);
+        std::vector<int> edge_checked(static_cast<size_t>(std::max(0, m)), -1);
         for (int v : unvisited) {
             for (int c : candidate_neighbors_[static_cast<size_t>(v)]) {
                 if (!state.is_visited[static_cast<size_t>(c)]) {
