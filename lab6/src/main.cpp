@@ -3,7 +3,6 @@
 #include "io/solver_cli_utils.h"
 #include "solution_checker.h"
 #include "solvers/base_solver.h"
-#include "solvers/greedy_heuristic_solver.h"
 #include "solvers/hae_solver.h"
 
 #include "hybrid_local_search_solver.h"
@@ -27,10 +26,7 @@ int main(int argc, char* argv[]) {
         const int max_time_ms = (argc >= 6) ? SolverCli::parseIntArg(argv[5], "max_time_ms") : 1000;
 
         SolveResult result;
-        if (args.solver_name == "greedy_baseline") {
-            GreedyHeuristicSolver solver(args.seed);
-            result = solver.solve(args.instance, args.start_node);
-        } else if (args.solver_name == "local_search_baseline") {
+        if (args.solver_name == "local_search_baseline") {
             HybridLocalSearchSolver solver(args.seed, max_time_ms);
             result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "msls") {

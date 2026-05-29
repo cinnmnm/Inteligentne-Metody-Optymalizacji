@@ -50,19 +50,20 @@ LAB6_SOLVERS = [
     "hae_op3_no_ls",
 ]
 
+LAB7_SOLVERS = [
+    "msls",
+    "hae_op2_ls",
+    "imhae_2",
+    "imhae_4",
+    "imhae_6",
+    "imhae_8",
+    "imhae_12",
+]
+
 def validate_lab_name(lab_name: str) -> None:
-    if lab_name == "lab1":
+    if lab_name in ("lab1", "lab2", "lab3", "lab4", "lab6", "lab7"):
         return
-    elif lab_name == "lab2":
-        return
-    elif lab_name == "lab3":
-        return
-    elif lab_name == "lab4":
-        return
-    elif lab_name == "lab6":
-        return
-    else:
-        raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
+    raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
 
 
 def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
@@ -100,7 +101,7 @@ def build_report_summary(df: pd.DataFrame, lab_name: str) -> pd.DataFrame:
                 mean_iterations=("perturbations", "mean"),
             )
         )
-    elif lab_name == "lab3" or lab_name == "lab4" or lab_name == "lab6":
+    elif lab_name in ("lab3", "lab4", "lab6", "lab7"):
         return (
             df.groupby(group_cols, as_index=False)
             .agg(
@@ -124,7 +125,7 @@ def resolve_results_dir(root: Path, lab_name: str, initial_solution_type: str) -
         return root / "results" / lab_name / initial_solution_type
     elif lab_name == "lab3":
         return root / "results" / lab_name
-    elif lab_name == "lab4" or lab_name == "lab6":
+    elif lab_name in ("lab4", "lab6", "lab7"):
         return root / "results" / lab_name
     else:
         raise ValueError(f"Unsupported lab name: {lab_name}. Expected lab1, lab2, lab3, etc.")
@@ -150,7 +151,7 @@ def main() -> None:
     args = parser.parse_args()
     validate_lab_name(args.lab)
 
-    if args.lab in ["lab4", "lab6"]:
+    if args.lab in ["lab4", "lab6", "lab7"]:
         if args.runs_per_instance == 1:
             args.runs_per_instance = 20
         if args.start_nodes_per_instance == 100:
@@ -298,6 +299,39 @@ def main() -> None:
             )
             df_meta = runner_meta.run()
             dfs.extend([df_msls, df_meta])
+        df = pd.concat(dfs, ignore_index=True)
+    elif args.lab == "lab7":
+        dfs: list[pd.DataFrame] = []
+        for inst_name, inst_path in instances.items():
+            single_inst = {inst_name: inst_path}
+
+            # MSLS to measure the timeframe (scaled to ~105ms for discriminative testing)
+            runner_calib = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=["msls"],
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+            )
+            df_calib = runner_calib.run()
+            mean_time_ms = max(1, int(round(float(df_calib["time_ms"].mean()))))
+            print(f"\nLab7 timing {inst_name} (MSLS avg time_ms): {mean_time_ms} ms")
+
+            # All lab7 solvers are time-limited
+            extra_args = {s: [str(mean_time_ms)] for s in LAB7_SOLVERS}
+
+            runner_meta = ExperimentRunner(
+                binary_path=binary_path,
+                instances=single_inst,
+                solvers=LAB7_SOLVERS,
+                runs_per_instance=args.runs_per_instance,
+                start_nodes_per_instance=1,
+                seed=8008136745555,
+                solver_extra_args=extra_args,
+            )
+            df_meta = runner_meta.run()
+            dfs.extend([df_meta])
         df = pd.concat(dfs, ignore_index=True)
     else:
         raise ValueError(f"Unsupported lab name: {args.lab}. Expected lab1, lab2, lab3, etc.")
