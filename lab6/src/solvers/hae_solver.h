@@ -12,7 +12,7 @@ enum class HaeOperator {
     ADAPTIVE
 };
 
-class HAE_Solver final : public LNS_Solver {
+class HAE_Solver : public LNS_Solver {
 public:
     struct PairHash {
         std::size_t operator()(const std::pair<int, int>& edge) const noexcept;
@@ -22,7 +22,7 @@ public:
 
     SolveResult solve(const Instance& instance, int start_node) override;
 
-private:
+protected:
     struct PopulationEntry {
         RouteState state;
         std::vector<int> canonical_route;

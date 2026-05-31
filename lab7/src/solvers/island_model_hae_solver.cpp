@@ -3,6 +3,7 @@
 #include "hae_solver.h"
 #include "ils_solver.h"
 #include "lns_solver.h"
+#include "sa_lns_solver.h"
 
 #include <algorithm>
 #include <chrono>
@@ -19,7 +20,9 @@ namespace {
 
 enum class IslandStrategy {
     HAE_OP2,       // Best single-strategy performer from Lab 6
+    SA_LNS_FAST,   // New SA-LNS hybrid with fast cooling
     HAE_OP1,
+    SA_LNS_SLOW,   // New SA-LNS hybrid with slow cooling
     HAE_OP3,
     HAE_ADAPTIVE,  // Randomly picks among Op1/Op2/Op3 each iteration
     LNS_MEDIUM,    // destroy_fraction = 0.3
@@ -30,7 +33,9 @@ enum class IslandStrategy {
 
 constexpr IslandStrategy STRATEGY_POOL[] = {
     IslandStrategy::HAE_OP2,
+    IslandStrategy::SA_LNS_FAST,
     IslandStrategy::HAE_OP1,
+    IslandStrategy::SA_LNS_SLOW,
     IslandStrategy::HAE_OP3,
     IslandStrategy::HAE_ADAPTIVE,
     IslandStrategy::LNS_MEDIUM,
@@ -47,6 +52,16 @@ SolveResult runIsland(IslandStrategy strategy, int seed,
                       int max_time_ms, bool use_ls,
                       const Instance& instance, int start_node) {
     switch (strategy) {
+    case IslandStrategy::SA_LNS_FAST: {
+        // Initial Temp 100, Cooling 0.95
+        SA_LNS_Solver solver(seed, max_time_ms, 0.3, 100.0, 0.95);
+        return solver.solve(instance, start_node);
+    }
+    case IslandStrategy::SA_LNS_SLOW: {
+        // Initial Temp 1000, Cooling 0.99
+        SA_LNS_Solver solver(seed, max_time_ms, 0.3, 1000.0, 0.99);
+        return solver.solve(instance, start_node);
+    }
     case IslandStrategy::HAE_OP1: {
         HAE_Solver solver(seed, max_time_ms, HaeOperator::OP1, use_ls);
         return solver.solve(instance, start_node);

@@ -53,9 +53,11 @@ LAB6_SOLVERS = [
 LAB7_SOLVERS = [
     "msls",
     "hae_op2_ls",
-    "imhae_2",
+    "gulasz",
+    "p_gulasz_4",
+    "p_gulasz_8",
+    "p_gulasz_12",
     "imhae_4",
-    "imhae_6",
     "imhae_8",
     "imhae_12",
 ]

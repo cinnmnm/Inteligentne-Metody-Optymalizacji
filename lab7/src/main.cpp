@@ -7,6 +7,9 @@
 
 #include "hae_solver.h"
 #include "msls_solver.h"
+#include "solvers/sa_lns_solver.h"
+#include "solvers/unified_hybrid_solver.h"
+#include "solvers/parallel_uhma_solver.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -36,6 +39,16 @@ int main(int argc, char* argv[]) {
             // Baseline: best single-population HAE from Lab 6
             HAE_Solver solver(args.seed, max_time_ms, HaeOperator::OP2, true);
             result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "gulasz") {
+            // New Single-Thread Własna Metoda (Unified Hybrid Memetic Algorithm)
+            UnifiedHybridSolver solver(args.seed, max_time_ms, 100.0, 0.99);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "sa_lns_fast") {
+            SA_LNS_Solver solver(args.seed, max_time_ms, 0.3, 100.0, 0.95);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "sa_lns_slow") {
+            SA_LNS_Solver solver(args.seed, max_time_ms, 0.3, 1000.0, 0.99);
+            result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "imhae_2") {
             IslandModelHAE_Solver solver(args.seed, max_time_ms, /*num_islands=*/2);
             result = solver.solve(args.instance, args.start_node);
@@ -50,6 +63,18 @@ int main(int argc, char* argv[]) {
             result = solver.solve(args.instance, args.start_node);
         } else if (args.solver_name == "imhae_12") {
             IslandModelHAE_Solver solver(args.seed, max_time_ms, /*num_islands=*/12);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "p_gulasz_2") {
+            ParallelUHMASolver solver(args.seed, max_time_ms, /*num_threads=*/2);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "p_gulasz_4") {
+            ParallelUHMASolver solver(args.seed, max_time_ms, /*num_threads=*/4);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "p_gulasz_8") {
+            ParallelUHMASolver solver(args.seed, max_time_ms, /*num_threads=*/8);
+            result = solver.solve(args.instance, args.start_node);
+        } else if (args.solver_name == "p_gulasz_12") {
+            ParallelUHMASolver solver(args.seed, max_time_ms, /*num_threads=*/12);
             result = solver.solve(args.instance, args.start_node);
         } else {
             std::cerr << "Unknown solver: " << args.solver_name << std::endl;
